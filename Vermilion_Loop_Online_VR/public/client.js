@@ -42,22 +42,38 @@ function serverAddress(){
 
 function connect(request){
   ui.inputWarning.textContent='Connecting…';ui.enter.disabled=true;$('#join-room').disabled=true;
+  $('#practice').disabled=true;
   net.solo=false;net.manualClose=false;
+  clearTimeout(reconnectTimer);
+  let attemptError='',stage='connecting';
   let endpoint;
   try{endpoint=serverAddress();endpoint.protocol=endpoint.protocol==='https:'?'wss:':'ws:';endpoint.pathname='/ws';endpoint.search='';endpoint.hash='';}
   catch(e){showConnectionError(e.message);return;}
-  const ws=new WebSocket(endpoint);net.ws=ws;
-  ws.onopen=()=>{net.connected=true;net.retry=0;sendMessage(request);};
+  const previous=net.ws,ws=new WebSocket(endpoint);net.ws=ws;
+  if(previous&&previous.readyState<WebSocket.CLOSING)previous.close(1000,'Connection replaced');
+  ws.onopen=()=>{
+    if(net.ws!==ws)return;
+    net.connected=true;
+    if(request.type==='create'){stage='creating';ui.inputWarning.textContent='Connected. Preparing the shared world…';}
+    sendMessage(request);
+  };
   ws.onmessage=event=>{
+    if(net.ws!==ws)return;
     let msg;try{msg=JSON.parse(event.data);}catch{return;}
+    if(msg.type==='creating'){stage='creating';ui.inputWarning.textContent=msg.message||'Preparing the shared world…';return;}
     if(msg.type==='welcome'){
+      stage='ready';net.retry=0;
       net.room=msg.room;net.token=msg.token;net.index=msg.index;net.seats=msg.seats;
       net.seq=0;net.pending=[];net.outbox=[];
       sessionStorage.setItem('vermilion-session',JSON.stringify({room:net.room,token:net.token}));
-      prepareOnlineWorld(msg.level,msg.mode);
-      applySnapshot(msg.snapshot,0,true);enterLocalView();
+      try{
+        prepareOnlineWorld(msg.level,msg.mode);
+        applySnapshot(msg.snapshot,0,true);enterLocalView();
+      }catch(error){
+        attemptError=`This device could not load the world: ${error.message}`;showConnectionError(attemptError);net.manualClose=true;ws.close();return;
+      }
       sendMessage({type:'ready',device:renderer.xr.isPresenting?'vr':'desktop'});
-      ui.enter.disabled=false;$('#join-room').disabled=false;
+      ui.enter.disabled=false;$('#join-room').disabled=false;$('#practice').disabled=false;
       showSignal(`ROOM ${net.room} · ${net.index===0?'Share the code with your friend.':'You joined the loop.'}`,6000);
     }
     if(msg.type==='status'){net.seats=msg.seats;updateNetworkStatus();}
@@ -66,22 +82,26 @@ function connect(request){
       applySnapshot(msg.snapshot,msg.ack);updateNetworkStatus();
     }
     if(msg.type==='pong')net.ping=Math.round(performance.now()-msg.at);
-    if(msg.type==='error'){showConnectionError(msg.message);if(!started){net.manualClose=true;ws.close();}}
+    if(msg.type==='error'){attemptError=msg.message;showConnectionError(attemptError);if(!started){net.manualClose=true;ws.close();}}
     if(msg.type==='ended'){net.running=false;showSignal(msg.message,12000);statusText('ROOM CLOSED · USE MENU TO RETURN');}
   };
-  ws.onerror=()=>{if(!started)showConnectionError('The server could not be reached. Check the address and that the Node web service is running.');};
-  ws.onclose=()=>{
+  ws.onerror=()=>{if(net.ws!==ws)return;if(!started){attemptError=stage==='creating'?'The server disconnected while preparing the room. Check the Render server logs.':'Could not reach the multiplayer connection. Check the hosted address and try again.';showConnectionError(attemptError);}};
+  ws.onclose=event=>{
+    if(net.ws!==ws)return;
     net.connected=false;net.running=false;clearKeys();updateNetworkStatus();
     if(net.manualClose)return;
     if(net.room&&started){
       const delay=Math.min(12000,1000*2**net.retry++);
       statusText('CONNECTION LOST · RECONNECTING…');
       reconnectTimer=setTimeout(()=>connect({type:'join',room:net.room,token:net.token}),delay);
-    }else{showConnectionError('Connection closed. Try again once the server is awake.');}
+    }else{
+      const reason=event.reason||attemptError||(stage==='creating'?'The server stopped responding while preparing the room. Check its Render logs.':'The multiplayer connection closed before a room was created.');
+      showConnectionError(`${reason} (connection ${event.code})`);
+    }
   };
 }
 
-function showConnectionError(message){ui.inputWarning.textContent=message;ui.enter.disabled=false;$('#join-room').disabled=false;}
+function showConnectionError(message){ui.inputWarning.textContent=message;ui.enter.disabled=false;$('#join-room').disabled=false;$('#practice').disabled=false;}
 function updateNetworkStatus(){
   if(net.solo){statusText('SOLO PRACTICE');return;}
   if(!net.connected){statusText('DISCONNECTED · RECONNECTING…');return;}

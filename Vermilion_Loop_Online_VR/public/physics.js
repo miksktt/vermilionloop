@@ -17,7 +17,7 @@ function heightAt(x, z) {
 }
 
 function buildCollisionWorld() {
-  collisionWorld = new CollisionOctree();
+  collisionWorld = new CollisionGrid();
   collisionTriangleCount = 0;
   // Fixed transforms are shared with rendering. Decorative foliage is non-solid.
   for (const o of animatedStructures) {

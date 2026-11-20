@@ -2,6 +2,17 @@
 
 Two players share one world, with any combination of Quest VR and desktop browser. This package preserves the four environments, Surveyors / Tag, three-lap hover racing with ordered checkpoints, free flying, temporary steps, charged cubes, NPCs and both sets of power-ups.
 
+## Updating an existing Render deployment
+
+This repair fixes room creation stalling on the server. It replaces the expensive recursive collision index with a spatial grid over the same triangles, and runs each world in a worker thread so that health checks and connections remain responsive.
+
+1. Extract the latest ZIP. Upload **all the contents of its inner folder** to the same GitHub repository, replacing the old files. Keep the `public` folder and the new `simulation-runner.mjs` and `simulation-worker.mjs` files.
+2. Keep your existing Render root directory and environment settings. Use build command `npm install --omit=dev` and start command `npm start`.
+3. Redeploy the latest commit in Render. Refresh the game with Ctrl+Shift+R after it finishes.
+4. Opening `/health` after your site's address should show build `online-vr-20261120-room-startup-fix`. That confirms that the repaired server is running.
+
+Room creation now shows a preparation message instead of a generic sleeping-server error. The repair doesn't require a paid hosting plan or a database.
+
 ## The easiest hosting route: Render
 
 Use a **Node Web Service**. It serves the website and the multiplayer WebSocket connection together. A static HTML host alone cannot run the multiplayer simulation.
@@ -15,7 +26,7 @@ Use a **Node Web Service**. It serves the website and the multiplayer WebSocket 
 | --- | --- |
 | Runtime / language | Node |
 | Root directory | Leave blank, if package.json is at the repository root |
-| Build command | `npm ci --omit=dev` |
+| Build command | `npm install --omit=dev` |
 | Start command | `npm start` |
 | Health check path | `/health` |
 | Environment variable | `NODE_VERSION=22` |
@@ -70,7 +81,7 @@ Temporary blocks last 30 seconds. Crystals grant the original power-ups. Shrink 
 
 ## Server behaviour
 
-The Node server runs the shared simulation at 60 steps per second and sends snapshots at 20 updates per second. Each player predicts their own movement locally. The server decides blocks, projectiles, pickups, tag transfers and race progress.
+Each room runs in its own worker thread. The Node server remains available while a world is being prepared. The shared simulation runs at 60 steps per second and sends snapshots at 20 updates per second. Each player predicts their own movement locally. The server decides blocks, projectiles, pickups, tag transfers and race progress.
 
 If a connection drops, the room pauses and the client attempts to reconnect. A reserved seat lasts about 90 seconds, subject to the server's cleanup interval. Keep the original page open for automatic reconnection. Leaving explicitly closes the room. Rooms live in memory, so restarting, redeploying or sleeping the server ends current matches. Keep this version on one server instance. It doesn't need a database for normal play.
 
@@ -109,7 +120,7 @@ Run:
 npm test
 ```
 
-The tests cover real two-client WebSocket play, room limits, shared throws, movement synchronisation, reconnection, handed VR controller routing, terrain triangle agreement, walls, roofs, gateway openings, stairs, expiring steps, size changes, world seams and boosted ship impacts.
+The tests cover real two-client WebSocket play, room limits, shared throws, movement synchronisation, reconnection, responsive health checks and pings during room preparation, clear client errors, handed VR controller routing, terrain triangle agreement, walls, roofs, gateway openings, stairs, expiring steps, size changes, world seams and boosted ship impacts.
 
 This build has automated physics and networking verification. The available preview browser could not create a WebGL graphics context, so a full visual play-through wasn't possible there. Actual Quest controller ergonomics, headset performance, comfort and play over your chosen hosting region still require testing on the headset. Collision checks don't establish that every possible geometry and network condition is bug-free.
 

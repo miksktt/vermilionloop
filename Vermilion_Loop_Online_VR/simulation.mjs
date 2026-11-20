@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
 
 const root=fileURLToPath(new URL('./public/',import.meta.url));
-const sources=['three.min.js','collision-vendor.js','core.js','physics.js'].map(f=>fs.readFileSync(root+f,'utf8'));
+const sources=['three.min.js','collision-vendor.js','collision-grid.js','core.js','physics.js'].map(f=>fs.readFileSync(root+f,'utf8'));
 
 function fakeElement() {
   const noop=()=>{};
@@ -20,7 +20,7 @@ export function createSimulation(level='forest',mode='survey') {
   const context=vm.createContext({console:{...console,warn:()=>{}},performance,document,navigator:{maxTouchPoints:0,getGamepads:()=>[]},
     window:{innerWidth:1280,innerHeight:800,matchMedia:()=>({matches:false}),setTimeout:()=>0},setTimeout:()=>0,clearTimeout:()=>{},
     __level:level,__mode:mode});
-  for(let i=0;i<sources.length;i++)vm.runInContext(sources[i],context,{filename:['three.min.js','collision-vendor.js','core.js','physics.js'][i]});
+  for(let i=0;i<sources.length;i++)vm.runInContext(sources[i],context,{filename:['three.min.js','collision-vendor.js','collision-grid.js','core.js','physics.js'][i]});
   vm.runInContext(`
     const serverEvents=[];
     showSignal=(text)=>{serverEvents.push({text:String(text).replaceAll('—',' · ')});if(serverEvents.length>12)serverEvents.shift();};
